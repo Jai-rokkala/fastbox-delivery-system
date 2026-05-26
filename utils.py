@@ -1,49 +1,59 @@
 import json
 import math
+import random
+import csv
+
 
 def load_data(filepath):
     with open(filepath, "r") as f:
         raw = json.loads(f.read())
 
-    warehouse = {}
-        for w in raw["warehouse"]:
-            warehouse[w["id"]] = w["location"]
+    warehouses = {}
+    if isinstance(raw["warehouses"], list):
+        for w in raw["warehouses"]:
+            warehouses[w["id"]] = w["location"]
+    else:
+        warehouses = raw["warehouses"]
+
 
     agents = {}
+    if isinstance(raw["agents"], list):
         for a in raw["agents"]:
             agents[a["id"]] = a["location"]
+    else:
+        agents = raw["agents"]
+
 
     packages = []
-        for p in raw["packages"]:
-            packages.append({
-                "id" = p["id"]
-                "warehouse" = p["warehouse_id"]
-                "destination": p["destination"]
-            })
+    for p in raw["packages"]:
+        packages.append({
+            "id": p["id"],
+            "warehouse": p.get("warehouse") or p.get("warehouse_id"),
+            "destination": p["destination"]
+        })
+
     return {"warehouses": warehouses, "agents": agents, "packages": packages}
+
 
 def euclidean(p1, p2):
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
+
 def assign_packages(packages, agents, warehouses):
-    # Keep track of where each delivery agent is right now.
-    # Initially, everyone starts at their assigned starting location.
+
+     # Keeping track of where each delivery agent is right now.
     agent_positions = {aid: list(pos) for aid, pos in agents.items()}
-    
+
     # Creating an empty delivery list for every agent.
     assignments = {aid: [] for aid in agents}
 
     for pkg in packages:
+
         # Get the coordinates of the warehouse this package belongs to.
         warehouse_pos = warehouses[pkg["warehouse"]]
 
-        # Picking the agent who is currently closest to the warehouse.
-        nearest = min(
-            agents,
-            key=lambda aid: euclidean(agent_positions[aid], warehouse_pos)
-        )
-
-        # Assigning the package to the selected agent.
+        # Find the nearest agent to this warehouse.
+        nearest = min(agents, key=lambda aid: euclidean(agent_positions[aid], warehouse_pos))
         assignments[nearest].append(pkg)
 
         # After delivering the package, the agent's new position
@@ -82,12 +92,14 @@ def simulate_deliveries(assignments, agents, warehouses):
             total_distance += leg1 + leg2
 
             # Save a summary of this delivery.
+            delay = random.randint(0, 15)
             delivered.append({
-                "package_id": pkg["id"],
-                "warehouse": pkg["warehouse"],
-                "destination": destination,
-                "distance": round(leg1 + leg2, 2)
-            })
+            "package_id": pkg["id"],
+            "warehouse": pkg["warehouse"],
+            "destination": destination,
+            "distance": round(leg1 + leg2, 2),
+            "delay_minutes": delay
+        })
 
             # After delivery, the agent's new location
             # becomes the destination point.
@@ -98,10 +110,7 @@ def simulate_deliveries(assignments, agents, warehouses):
 
         # Efficiency is measured as average distance travelled
         # per package delivered.
-        efficiency = (
-            round(total_distance / packages_delivered, 2)
-            if packages_delivered else 0.0
-        )
+        efficiency = round(total_distance / packages_delivered, 2) if packages_delivered else 0.0
 
         # Store the final performance summary for this agent.
         results[agent_id] = {
@@ -113,6 +122,7 @@ def simulate_deliveries(assignments, agents, warehouses):
 
     return results
 
+
 def generate_report(results):
     report = {}
 
@@ -123,8 +133,10 @@ def generate_report(results):
             "efficiency": data["efficiency"]
         }
 
-    # Best agent = lowest efficiency score (least distance per package)
-    best_agent = min(report, key=lambda aid: report[aid]["efficiency"])
+    active = {aid: v for aid, v in report.items() if v["packages_delivered"] > 0}
+
+     # Best agent = lowest efficiency score (least distance per package)
+    best_agent = min(active, key=lambda aid: active[aid]["efficiency"])
     report["best_agent"] = best_agent
 
     return report
@@ -134,3 +146,45 @@ def save_report(report, filepath="report.json"):
     with open(filepath, "w") as f:
         json.dump(report, f, indent=2)
     print(f"Report saved to {filepath}")
+
+#Bonus = Export top performer details to CSV
+def export_top_performer(report, results, filepath="top_performer.csv"):
+    best = report["best_agent"]
+    deliveries = results[best]["deliveries"]
+
+    with open(filepath, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Agent", "Package", "Warehouse", "Destination", "Distance", "Delay (min)"])
+        for d in deliveries:
+            writer.writerow([
+                best,
+                d["package_id"],
+                d["warehouse"],
+                d["destination"],
+                d["distance"],
+                d["delay_minutes"]
+            ])
+    print(f"Top performer CSV saved to {filepath}")
+
+# Bonus = Simple ASCII map visualization of the scenario
+def ascii_map(warehouses, agents, packages, grid_size=12, scale=10):
+    grid = [["." for _ in range(grid_size + 1)] for _ in range(grid_size + 1)]
+
+    def place(pos, symbol):
+        gx = min(int(pos[0] / scale), grid_size)
+        gy = min(int(pos[1] / scale), grid_size)
+        grid[grid_size - gy][gx] = symbol
+
+    for pos in warehouses.values():
+        place(pos, "W")
+    for pos in agents.values():
+        place(pos, "A")
+    for pkg in packages:
+        place(pkg["destination"], "D")
+
+    print("\n[ ASCII Map ]")
+    print("  +" + "-" * (grid_size * 2 + 1) + "+")
+    for row in grid:
+        print("  | " + " ".join(row) + " |")
+    print("  +" + "-" * (grid_size * 2 + 1) + "+")
+    print("  W=Warehouse  A=Agent  D=Destination\n")

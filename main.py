@@ -1,5 +1,5 @@
 import sys
-from utils import load_data, assign_packages, simulate_deliveries, generate_report, save_report
+from utils import load_data, assign_packages, simulate_deliveries, generate_report, save_report, export_top_performer, ascii_map
 
 def main():
     # Step 1: Loading data
@@ -30,6 +30,12 @@ def main():
     # Step 4: Generating and saving report
     report = generate_report(results)
     save_report(report)
+
+    # Bonus: ASCII map
+    ascii_map(warehouses, agents, packages)
+
+    # Bonus: CSV export
+    export_top_performer(report, results)
 
     print(f"\nBest agent: {report['best_agent']}")
     print(f"Total packages delivered: {sum(r['packages_delivered'] for r in results.values())} / {len(packages)}")

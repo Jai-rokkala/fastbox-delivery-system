@@ -112,3 +112,25 @@ def simulate_deliveries(assignments, agents, warehouses):
         }
 
     return results
+
+def generate_report(results):
+    report = {}
+
+    for agent_id, data in results.items():
+        report[agent_id] = {
+            "packages_delivered": data["packages_delivered"],
+            "total_distance": data["total_distance"],
+            "efficiency": data["efficiency"]
+        }
+
+    # Best agent = lowest efficiency score (least distance per package)
+    best_agent = min(report, key=lambda aid: report[aid]["efficiency"])
+    report["best_agent"] = best_agent
+
+    return report
+
+
+def save_report(report, filepath="report.json"):
+    with open(filepath, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"Report saved to {filepath}")
